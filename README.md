@@ -144,3 +144,20 @@ emg2qwerty is CC-BY-NC-4.0 licensed, as found in the LICENSE file.
       url={https://arxiv.org/abs/2410.20081},
 }
 ```
+
+## CNN-BiGRU experiment
+
+The optional `cnn_bigru_ctc` model keeps the single-user splits, spectrogram
+preprocessing, CTC loss, greedy decoding, and metrics used by the TDS baseline.
+It applies a small temporal convolution and a two-layer bidirectional GRU. The
+baseline remains the default. Select the new architecture with the Hydra
+argument `model=cnn_bigru_ctc`; see `config/model/cnn_bigru_ctc.yaml` for its
+size settings. Use a published branch or commit containing this file when
+running on Colab; local source files are not automatically synchronized.
+
+Start with a short run before committing GPU credits, then compare validation
+CER and runtime under the same data splits and decoding settings. The model
+uses future context and is therefore intended for offline evaluation. The
+existing test loader evaluates an entire session at once: memory and runtime
+on a T4 have not yet been measured, so test that path before a long run. Do not
+compare truncated test sessions as if they were the full baseline test.
