@@ -1,0 +1,16 @@
+# @package _global_
+# Preserve the TDS baseline front end; add a small, two-layer BiGRU.
+module:
+  _target_: emg2qwerty.tds_bigru.TDSBiGRUCTCModule
+  in_features: 528
+  mlp_features: [384]
+  block_channels: [24, 24, 24, 24]
+  kernel_width: 32
+  hidden_size: 128  # Per direction, matching cnn_bigru_ctc.
+  num_layers: 2
+  dropout: 0.1
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]

@@ -161,3 +161,18 @@ uses future context and is therefore intended for offline evaluation. The
 existing test loader evaluates an entire session at once: memory and runtime
 on a T4 have not yet been measured, so test that path before a long run. Do not
 compare truncated test sessions as if they were the full baseline test.
+
+## TDS-BiGRU experiment
+
+Select `model=tds_bigru_ctc` to compare the baseline TDS front end (including
+four TDS blocks) with an added two-layer bidirectional GRU. The defaults retain
+the baseline's wrist feature size, preprocessing, data splits, CTC loss, and
+greedy decoder. The GRU has 128 hidden units per direction, matching the
+smaller CNN-BiGRU model. The TDS layers shorten each spectrogram by 124 frames;
+sequence lengths are adjusted before packing and computing CTC loss.
+
+This is an offline model: the backward GRU uses future context. Its full-session
+test memory and runtime on Colab GPUs have not yet been measured. Start with a
+short run before using a 40-epoch budget, and compare validation CER using the
+same preprocessing and data splits. A local branch is not automatically visible
+to Colab; upload the model files or use an explicitly published ref when testing.
