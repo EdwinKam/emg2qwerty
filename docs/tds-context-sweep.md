@@ -53,9 +53,49 @@ The run manifest, logs, checkpoints, and machine-generated summary are in the
 [Drive sweep folder](https://drive.google.com/drive/u/0/folders/18kfsMIYYFjkAOsMmGLukP8v64Mp3m4yH)
 for collaborators who already have access.
 
-## Run on Colab
+## Longer-context follow-up
 
-1. Use the included `Colab_setup.ipynb` and a dedicated hosted GPU runtime. Put `tds-context-sweep.bundle` in your Drive project directory alongside the existing `89335547.zip`. The bundle contains Git history and source. The subject ZIP supplies the recordings.
+The follow-up adds one four-block, width-48 case. It uses the same session
+split, seed 1501, 40 epochs, batch size 32, and greedy CTC decoder as the
+completed width-32 reference (23.75% validation CER and 25.07% test CER).
+
+A kernel width of 48 means 48 spectrogram frames in **each** temporal
+convolution. With stride one and no dilation, four such convolutions have
+a receptive field of `1 + 4 × (48 − 1) = 189` frames. The last frame starts
+188 × 8 ms after the first. Including the 32 ms FFT window, this covers
+**1,536 ms** of raw signal versus the baseline's **1,024 ms**.
+
+The wider stack consumes 64 additional frames. The loader adds the
+corresponding 1,024 raw samples (512 ms) on the **past** side relative to the
+baseline input. The extra samples come from the same session when available,
+with zero fill at its start. This keeps the target interval, future context,
+and number of emissions aligned with the width-32 configuration, including
+for full-session inference. Timing still uses one fixed 497-frame input for
+comparison with the original results. Compare timing across runs on the
+same GPU model.
+
+1. Upload `tds-longer-context.bundle` alongside the existing `89335547.zip`
+   in `My Drive/ECE247A_final_project`. Open the updated
+   `Colab_setup.ipynb` in browser Colab.
+2. Run the settings and training cells on a hosted GPU. The defaults
+   `RUN_MODE = "sweep"` and `SWEEP_EXPERIMENT = "longer-context"` launch only
+   `tds-4x48`. The runner validates its best checkpoint and evaluates it on
+   the same held-out test session as the reference.
+3. Read `experiments/tds-longer-context-seed1501/summary.md` in Drive. This
+   is a new output directory, separate from the four-case sweep.
+
+For an existing GPU checkout, use `--experiment longer-context` with the
+same runner and a new output directory. Otherwise the runner defaults to the
+original four-case sweep. To transport the follow-up branch, run:
+
+```sh
+git bundle create /path/to/tds-longer-context.bundle HEAD refs/heads/codex/tds-longer-context
+git bundle verify /path/to/tds-longer-context.bundle
+```
+
+## Reproduce the original sweep on Colab
+
+1. Use `Colab_setup.ipynb` from the original sweep branch and a dedicated hosted GPU runtime. Put `tds-context-sweep.bundle` in your Drive project directory alongside the existing `89335547.zip`. The bundle contains Git history and source. The subject ZIP supplies the recordings.
 2. Run the settings and training cells. Change `DRIVE_PROJECT` if your files are elsewhere. Authorize the Drive mount when Colab asks. Check that the first configuration starts before stepping away.
 3. Open `experiments/tds-context-depth-seed1501/summary.md` in that Drive directory for partial or final results. After a successful sweep the notebook flushes Drive and releases the GPU. If a case failed, check the summary and the affected console log, then release the GPU once it is idle.
 4. To resume, use the same bundle, extracted data and Drive output path. Completed cases are reused. A case interrupted during training can resume from its latest saved Lightning checkpoint. Use a separate directory for a changed commit, dataset, seed or package environment. Start only one sweep process per output directory.

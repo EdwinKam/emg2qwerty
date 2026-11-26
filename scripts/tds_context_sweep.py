@@ -1,4 +1,4 @@
-"""Run the four single-user TDS context/depth experiments sequentially."""
+"""Run the single-user TDS context and depth experiments."""
 
 import argparse
 import hashlib
@@ -23,6 +23,7 @@ SEED = 1501
 class Case:
     blocks: int
     kernel: int
+    extra_left_context: int = 0  # Raw samples
 
     @property
     def name(self) -> str:
@@ -34,6 +35,8 @@ class Case:
 
 
 CASES = (Case(4, 32), Case(4, 16), Case(2, 63), Case(2, 31))
+LONGER_CONTEXT_CASE = Case(4, 48, extra_left_context=4 * (48 - 32) * 16)
+EXPERIMENTS = {"context-depth": CASES, "longer-context": (LONGER_CONTEXT_CASE,)}
 
 
 def read_json(path: Path) -> dict:
@@ -73,7 +76,7 @@ def case_command(
     case: Case, data: Path, run_dir: Path, epochs: int, accelerator: str, seed: int
 ) -> list[str]:
     channels = ",".join(["24"] * case.blocks)
-    return [
+    command = [
         sys.executable, "-u", "-m", "emg2qwerty.train",
         "user=single_user", "model=tds_conv_ctc", "decoder=ctc_greedy",
         f"dataset.root={json.dumps(str(data))}",
@@ -85,6 +88,9 @@ def case_command(
         "evaluate_test=false", "write_results=true", "benchmark_inference=true",
         "hydra.job.chdir=true", f"hydra.run.dir={json.dumps(str(run_dir))}",
     ]
+    if case.extra_left_context:
+        command.append(f"+datamodule.extra_left_context={case.extra_left_context}")
+    return command
 
 
 def run(command: list[str], directory: Path) -> dict:
@@ -110,18 +116,23 @@ def validation_cer(result: dict) -> float:
 
 
 def summarize(
-    output: Path, results: dict[Case, dict], failures: dict[str, str], winner: dict | None
+    output: Path,
+    cases: tuple[Case, ...],
+    results: dict[Case, dict],
+    failures: dict[str, str],
+    winner: dict | None,
 ) -> None:
+    title = "TDS context and depth sweep" if cases == CASES else "TDS longer-context experiment"
     rows = [
-        "# TDS context and depth sweep",
+        f"# {title}",
         "",
-        f"{len(results)} of {len(CASES)} configurations have validation results.",
+        f"{len(results)} of {len(cases)} configurations have validation results.",
         "",
         "| Configuration | Raw signal span | Validation CER | Parameters | Median forward pass | Device |",
         "|---|---:|---:|---:|---:|---|",
     ]
     best = min(results, key=lambda case: validation_cer(results[case]), default=None)
-    for case in CASES:
+    for case in cases:
         result = results.get(case)
         if result is None:
             state = "Failed" if case.name in failures else "Pending"
@@ -138,8 +149,11 @@ def summarize(
         "Forward-pass time uses one 497-frame spectrogram and excludes feature "
         "extraction, CTC decoding and live typing delay.",
         "",
-        "CER changes below are signed percentage-point differences. Negative values improve CER.",
     ]
+    if cases == CASES:
+        rows.append(
+            "CER changes below are signed percentage-point differences. Negative values improve CER."
+        )
     comparisons = (
         ("Longer context at four blocks", Case(4, 16), Case(4, 32)),
         ("Longer context at two blocks", Case(2, 31), Case(2, 63)),
@@ -156,7 +170,7 @@ def summarize(
                 time_change = after_timing["median_ms"] - before_timing["median_ms"]
                 comparison += f" and median forward time by {time_change:+.2f} ms"
             rows.append(comparison + ".")
-    if len(results) == len(CASES):
+    if cases == CASES and len(results) == len(cases):
         context_gain_at_two = (
             validation_cer(results[Case(2, 63)]) - validation_cer(results[Case(2, 31)])
         )
@@ -175,7 +189,7 @@ def summarize(
     if winner is not None:
         test = winner["test_metrics"][0]["test/CER"]
         rows.append(f"The validation-selected checkpoint scored **{test:.2f}% test CER**.")
-    elif len(results) == len(CASES):
+    elif len(results) == len(cases):
         rows.append("Held-out test evaluation is pending.")
     for name, reason in failures.items():
         rows.append(f"- {name} failed. {reason}")
@@ -199,10 +213,12 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True, help="Persistent sweep directory")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument("--experiment", choices=EXPERIMENTS, default="context-depth")
     parser.add_argument("--accelerator", choices=["gpu", "cpu"], default="gpu")
     args = parser.parse_args()
     if args.epochs <= 10:
         parser.error("--epochs must exceed the baseline's 10 warmup epochs")
+    cases = EXPERIMENTS[args.experiment]
     data, output = args.data.resolve(), args.output.resolve()
     git = ["git", "-C", str(REPO)]
     tracked_changes = subprocess.check_output(
@@ -218,11 +234,12 @@ def main() -> None:
         "epochs": args.epochs,
         "accelerator": args.accelerator,
         "seed": args.seed,
+        "experiment": args.experiment,
         "dataset": dataset_manifest(data),
         "cases": [
             {"name": case.name, "blocks": case.blocks, "kernel": case.kernel,
-             "context_ms": case.context_ms}
-            for case in CASES
+             "context_ms": case.context_ms, "extra_left_context_samples": case.extra_left_context}
+            for case in cases
         ],
     }
     output.mkdir(parents=True, exist_ok=True)
@@ -246,8 +263,8 @@ def main() -> None:
     results = {}
     failures = {}
     if not (output / "summary.md").is_file():
-        summarize(output, results, failures, None)
-    for case in CASES:
+        summarize(output, cases, results, failures, None)
+    for case in cases:
         directory = output / case.name
         try:
             completed = read_completed(directory)
@@ -263,7 +280,7 @@ def main() -> None:
         except (subprocess.CalledProcessError, ValueError) as error:
             failures[case.name] = f"{type(error).__name__}. See {case.name}/console.log."
             print(failures[case.name], file=sys.stderr, flush=True)
-        summarize(output, results, failures, None)
+        summarize(output, cases, results, failures, None)
     if failures:
         raise SystemExit(f"{len(failures)} incomplete configurations. See {output / 'summary.md'}.")
 
@@ -279,7 +296,7 @@ def main() -> None:
         command += ["train=false", f"checkpoint={json.dumps(results[best]['best_checkpoint'])}"]
         print(f"Testing validation winner {best.name}.", flush=True)
         winner = run(command, directory)
-    summarize(output, results, failures, winner)
+    summarize(output, cases, results, failures, winner)
     print((output / "summary.md").read_text(), flush=True)
 
 

@@ -42,11 +42,13 @@ class WindowedEMGDataModule(pl.LightningDataModule):
         train_transform: Transform[np.ndarray, torch.Tensor],
         val_transform: Transform[np.ndarray, torch.Tensor],
         test_transform: Transform[np.ndarray, torch.Tensor],
+        extra_left_context: int = 0,
     ) -> None:
         super().__init__()
 
         self.window_length = window_length
         self.padding = padding
+        self.extra_left_context = extra_left_context
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -67,6 +69,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
                     transform=self.train_transform,
                     window_length=self.window_length,
                     padding=self.padding,
+                    extra_left_context=self.extra_left_context,
                     jitter=True,
                 )
                 for hdf5_path in self.train_sessions
@@ -79,6 +82,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
                     transform=self.val_transform,
                     window_length=self.window_length,
                     padding=self.padding,
+                    extra_left_context=self.extra_left_context,
                     jitter=False,
                 )
                 for hdf5_path in self.val_sessions
@@ -89,10 +93,11 @@ class WindowedEMGDataModule(pl.LightningDataModule):
                 WindowedEMGDataset(
                     hdf5_path,
                     transform=self.test_transform,
-                    # Feed the entire session at once without windowing/padding
-                    # at test time for more realism
+                    # Feed the full session, with an optional prefix to match
+                    # the baseline's emission coverage at the session start.
                     window_length=None,
                     padding=(0, 0),
+                    extra_left_context=self.extra_left_context,
                     jitter=False,
                 )
                 for hdf5_path in self.test_sessions
