@@ -10,11 +10,11 @@ from scripts.run_experiment import REPO, case_command, read_experiment, split_se
 @pytest.mark.parametrize(
     "manifest,expected",
     [
-        ("tds_longer_context/experiment.yaml", [("tds-4x48", 4, 48, 1024, False)]),
-        ("tds_baseline/experiment.yaml", [("tds-4x32", 4, 32, 0, False)]),
-        ("tds_bigru/experiment.yaml", [("tds-bigru", 4, 32, 0, True)]),
+        ("experiments/tds_longer_context/experiment.yaml", [("tds-4x48", 4, 48, 1024, False)]),
+        ("benchmarks/tds_baseline/experiment.yaml", [("tds-4x32", 4, 32, 0, False)]),
+        ("benchmarks/tds_bigru_offline/experiment.yaml", [("tds-bigru", 4, 32, 0, True)]),
         (
-            "tds_baseline/context-depth.yaml",
+            "experiments/tds_context_depth/experiment.yaml",
             [
                 ("tds-4x32", 4, 32, 0, False),
                 ("tds-4x16", 4, 16, 0, False),
@@ -25,7 +25,7 @@ from scripts.run_experiment import REPO, case_command, read_experiment, split_se
     ],
 )
 def test_experiment_configs_preserve_the_recorded_protocol(manifest, expected):
-    experiment = read_experiment(REPO / "experiments" / manifest)
+    experiment = read_experiment(REPO / manifest)
     sessions = split_sessions(experiment)
     assert {phase: len(files) for phase, files in sessions.items()} == {
         "train": 16, "val": 1, "test": 1,

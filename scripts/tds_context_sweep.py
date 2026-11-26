@@ -12,7 +12,7 @@ else:
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
     manifests = {
-        "context-depth": "tds_baseline/context-depth.yaml",
+        "context-depth": "tds_context_depth/experiment.yaml",
         "longer-context": "tds_longer_context/experiment.yaml",
     }
     parser = argparse.ArgumentParser(add_help=False)

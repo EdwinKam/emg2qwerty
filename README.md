@@ -5,19 +5,23 @@ This course project is built upon the emg2qwerty work from Meta. The first secti
 
 ## Course project experiments
 
-Experiments live under `experiments/`. Each has its own manifest and README.
-The shared launcher, data pipeline, training loop, decoder, and metrics live
-outside those folders.
+### What to run first
 
-| Experiment | Manifest | Question |
+| If you want to… | Start with | Recorded result |
 |---|---|---|
-| TDS width 48 | [experiments/tds_longer_context/experiment.yaml](experiments/tds_longer_context/experiment.yaml) | Does expanding the four-block context to 1.536 seconds help? |
-| Original TDS baseline | [experiments/tds_baseline/experiment.yaml](experiments/tds_baseline/experiment.yaml) | How does the four-block, width-32 model perform at 1.024 seconds? |
-| TDS + BiGRU | [experiments/tds_bigru/experiment.yaml](experiments/tds_bigru/experiment.yaml) | Does a two-layer bidirectional GRU improve the TDS encoder? |
-| Original four-case sweep | [experiments/tds_baseline/context-depth.yaml](experiments/tds_baseline/context-depth.yaml) | How do context and depth affect CER and forward time? |
+| Verify the setup or reproduce the reference | [TDS baseline](benchmarks/tds_baseline/) | **25.07% test CER** in the sweep rerun. This is the Colab default. |
+| Try our best measured offline model | [TDS + BiGRU](benchmarks/tds_bigru_offline/) | **22.50% test CER** on the same held-out session. The backward GRU uses future frames. |
+| Test whether more context helps | [Width-48 TDS](experiments/tds_longer_context/) | Tests **1.536 s** of context. A result has yet to be recorded in this repository. |
+| Reproduce the completed comparison | [Context and depth sweep](experiments/tds_context_depth/) | Four cases. The width-32 baseline won on validation. |
 
-Previous measurements, artifact paths, and training commits are described in
-the [experiment record](docs/tds-context-sweep.md).
+These CERs are from one subject. Start with the baseline in smoke mode to
+check the setup. Choose BiGRU when offline accuracy is the goal.
+
+`benchmarks/` contains runnable reference configurations with recorded results.
+`experiments/` contains research comparisons and follow-ups. Each folder has
+an `experiment.yaml` that uses the same launcher and an explanation of what the
+run is for. See the [experiment record](docs/tds-context-sweep.md) for training
+commits, measured results, and artifact paths.
 
 ### Data split and default protocol
 
@@ -46,7 +50,7 @@ root on a clean checkout, run:
 
 ```sh
 python scripts/run_experiment.py \
-  --experiment experiments/tds_longer_context/experiment.yaml \
+  --experiment benchmarks/tds_baseline/experiment.yaml \
   --data /path/to/hdf5-sessions \
   --output-root /path/to/experiment-results
 ```
@@ -63,7 +67,7 @@ choose a new output root or exact `--output` path.
 
 **Browser Colab.** Import [`Colab_setup.ipynb`](Colab_setup.ipynb), select a
 hosted GPU, and set `EXPERIMENT` to the desired YAML path. It defaults to
-width 48. For published code, set `PROJECT_BUNDLE = None` and set
+`benchmarks/tds_baseline/experiment.yaml`. For published code, set `PROJECT_BUNDLE = None` and set
 `PROJECT_REF` to the full Git commit SHA. To use a local commit, create
 a Git bundle with `git bundle create emg2qwerty-experiments.bundle HEAD`
 and put it next to `89335547.zip` in Drive. Run the settings and launch
@@ -270,5 +274,5 @@ smaller CNN-BiGRU model. The TDS layers shorten each spectrogram by 124 frames;
 sequence lengths are adjusted before packing and computing CTC loss.
 
 This is an offline model because the backward GRU uses future context. The
-[experiment folder](experiments/tds_bigru/) records the completed run and a
+[benchmark folder](benchmarks/tds_bigru_offline/) records the completed run and a
 manifest for repeating it.
