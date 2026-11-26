@@ -13,6 +13,9 @@ batch_size: 32
 num_workers: 4  # Number of workers for dataloading
 train: True  # Whether to train or only run validation and test
 checkpoint: null  # Optional path to checkpoint file
+evaluate_test: True
+write_results: False  # Save structured validation/test results in the Hydra output directory
+benchmark_inference: False  # Time model forward passes on one fixed-length spectrogram
 monitor_metric: val/CER
 monitor_mode: min
 

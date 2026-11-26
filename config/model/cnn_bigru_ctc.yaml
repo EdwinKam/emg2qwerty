@@ -1,0 +1,16 @@
+# @package _global_
+# Keep the baseline preprocessing, data splits, loss and decoder.
+module:
+  _target_: emg2qwerty.cnn_bigru.CNNBiGRUCTCModule
+  in_features: 528  # 16 electrodes * 33 log-spectrogram frequencies per wrist
+  mlp_features: [128]
+  conv_features: 128
+  kernel_width: 5  # Odd width, stride 1 and same padding preserve time length.
+  hidden_size: 128  # Per direction.
+  num_layers: 2
+  dropout: 0.1
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]

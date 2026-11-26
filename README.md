@@ -144,3 +144,41 @@ emg2qwerty is CC-BY-NC-4.0 licensed, as found in the LICENSE file.
       url={https://arxiv.org/abs/2410.20081},
 }
 ```
+
+## Single-user TDS context and depth experiment
+
+The [experiment write-up](docs/tds-context-sweep.md) records the four-way
+context and depth comparison, earlier CNN and BiGRU results, and instructions
+to reproduce the sweep and recover its artifacts.
+
+## CNN-BiGRU experiment
+
+The optional `cnn_bigru_ctc` model keeps the single-user splits, spectrogram
+preprocessing, CTC loss, greedy decoding, and metrics used by the TDS baseline.
+It applies a small temporal convolution and a two-layer bidirectional GRU. The
+baseline remains the default. Select the new architecture with the Hydra
+argument `model=cnn_bigru_ctc`; see `config/model/cnn_bigru_ctc.yaml` for its
+size settings. Use a published branch or commit containing this file when
+running on Colab; local source files are not automatically synchronized.
+
+Start with a short run before committing GPU credits, then compare validation
+CER and runtime under the same data splits and decoding settings. The model
+uses future context and is therefore intended for offline evaluation. The
+existing test loader evaluates an entire session at once: memory and runtime
+on a T4 have not yet been measured, so test that path before a long run. Do not
+compare truncated test sessions as if they were the full baseline test.
+
+## TDS-BiGRU experiment
+
+Select `model=tds_bigru_ctc` to compare the baseline TDS front end (including
+four TDS blocks) with an added two-layer bidirectional GRU. The defaults retain
+the baseline's wrist feature size, preprocessing, data splits, CTC loss, and
+greedy decoder. The GRU has 128 hidden units per direction, matching the
+smaller CNN-BiGRU model. The TDS layers shorten each spectrogram by 124 frames;
+sequence lengths are adjusted before packing and computing CTC loss.
+
+This is an offline model: the backward GRU uses future context. Its full-session
+test memory and runtime on Colab GPUs have not yet been measured. Start with a
+short run before using a 40-epoch budget, and compare validation CER using the
+same preprocessing and data splits. A local branch is not automatically visible
+to Colab; upload the model files or use an explicitly published ref when testing.
