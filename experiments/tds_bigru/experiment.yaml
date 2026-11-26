@@ -1,0 +1,26 @@
+id: tds-bigru
+title: TDS and bidirectional GRU
+split: single_user
+seed: 1501
+epochs: 40
+overrides:
+  - transforms=log_spectrogram
+  - optimizer=adam
+  - lr_scheduler=linear_warmup_cosine_annealing
+  - decoder=ctc_greedy
+  - batch_size=32
+  - num_workers=2
+cases:
+  tds-bigru:
+    frontend_context_ms: 1024
+    overrides:
+      - model=tds_bigru_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - module.block_channels=[24,24,24,24]
+      - module.kernel_width=32
+      - module.hidden_size=128
+      - module.num_layers=2
+      - module.dropout=0.1
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]

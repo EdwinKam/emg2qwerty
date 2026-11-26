@@ -40,16 +40,17 @@ def _benchmark_inference(module, config: DictConfig, device: torch.device) -> di
         fft_size // 2 + 1,
         device=device,
     )
+    input_lengths = torch.tensor([frame_count], dtype=torch.int32)
     module.to(device).eval()
     timings = []
     with torch.inference_mode():
         for _ in range(10):
-            module(inputs)
+            module(inputs, input_lengths=input_lengths)
         if device.type == "cuda":
             torch.cuda.synchronize(device)
         for _ in range(30):
             started = perf_counter()
-            module(inputs)
+            module(inputs, input_lengths=input_lengths)
             if device.type == "cuda":
                 torch.cuda.synchronize(device)
             timings.append((perf_counter() - started) * 1_000)

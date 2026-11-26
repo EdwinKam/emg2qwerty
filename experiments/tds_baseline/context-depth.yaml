@@ -1,0 +1,58 @@
+id: tds-context-depth
+title: TDS context and depth sweep
+split: single_user
+seed: 1501
+epochs: 40
+overrides:
+  - transforms=log_spectrogram
+  - optimizer=adam
+  - lr_scheduler=linear_warmup_cosine_annealing
+  - decoder=ctc_greedy
+  - batch_size=32
+  - num_workers=2
+cases:
+  tds-4x32:
+    frontend_context_ms: 1024
+    overrides:
+      - model=tds_conv_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]
+      - module.block_channels=[24,24,24,24]
+      - module.kernel_width=32
+  tds-4x16:
+    frontend_context_ms: 512
+    overrides:
+      - model=tds_conv_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]
+      - module.block_channels=[24,24,24,24]
+      - module.kernel_width=16
+  tds-2x63:
+    frontend_context_ms: 1024
+    overrides:
+      - model=tds_conv_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]
+      - module.block_channels=[24,24]
+      - module.kernel_width=63
+  tds-2x31:
+    frontend_context_ms: 512
+    overrides:
+      - model=tds_conv_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]
+      - module.block_channels=[24,24]
+      - module.kernel_width=31
+comparisons:
+  - {label: Longer context at four blocks, before: tds-4x16, after: tds-4x32}
+  - {label: Longer context at two blocks, before: tds-2x31, after: tds-2x63}
+  - {label: Four versus two blocks at 512 ms, before: tds-2x31, after: tds-4x16}
+  - {label: Four versus two blocks at 1024 ms, before: tds-2x63, after: tds-4x32}

@@ -1,5 +1,9 @@
 # TDS context and depth experiment
 
+For the current launcher and checked-in experiment folders, start at the
+[root README](../README.md#course-project-experiments). This record includes
+the original notebook and CLI instructions for the historical commits.
+
 This experiment tests how much signal context helps recognize keystrokes, and whether four TDS blocks improve CER over two at the same context. It uses the convolution-only encoder and greedy CTC decoding. The BiGRU runs are separate references.
 
 | Blocks | Kernel width | Spectrogram frames | Raw signal span |
@@ -54,6 +58,10 @@ The run manifest, logs, checkpoints, and machine-generated summary are in the
 for collaborators who already have access.
 
 ## Longer-context follow-up
+
+Use the [current manifest](../experiments/tds_longer_context/experiment.yaml)
+with the root launcher. The bundle instructions in this section apply to
+commit `b345f9c`.
 
 The follow-up adds one four-block, width-48 case. It uses the same session
 split, seed 1501, 40 epochs, batch size 32, and greedy CTC decoder as the

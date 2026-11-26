@@ -112,7 +112,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             collate_fn=WindowedEMGDataset.collate,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -123,7 +123,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             collate_fn=WindowedEMGDataset.collate,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -138,7 +138,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             collate_fn=WindowedEMGDataset.collate,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
 
 
@@ -199,7 +199,9 @@ class TDSConvCTCModule(pl.LightningModule):
             }
         )
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, inputs: torch.Tensor, input_lengths: torch.Tensor | None = None
+    ) -> torch.Tensor:
         return self.model(inputs)
 
     def _step(
