@@ -443,6 +443,8 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
             a window/slice of `EMGSessionData` in the form of a numpy
             structured array and returns a `torch.Tensor` instance.
             (default: ``emg2qwerty.transforms.ToTensor()``)
+        extra_left_context (int): Additional raw EMG samples before the usual
+            input window. Missing samples at the start of a session are zeros.
     """
 
     hdf5_path: Path
@@ -451,6 +453,7 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
     padding: InitVar[tuple[int, int]] = (0, 0)
     jitter: bool = False
     transform: Transform[np.ndarray, torch.Tensor] = field(default_factory=ToTensor)
+    extra_left_context: int = 0
 
     def __post_init__(
         self,
@@ -472,6 +475,7 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
 
         (self.left_padding, self.right_padding) = padding
         assert self.left_padding >= 0 and self.right_padding >= 0
+        assert self.extra_left_context >= 0
 
     def __len__(self) -> int:
         return int(max(self.session_length - self.window_length, 0) // self.stride + 1)
@@ -492,21 +496,24 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
             offset += np.random.randint(0, min(self.stride, leftover))
 
         # Expand window to include contextual padding and fetch.
-        window_start = max(offset - self.left_padding, 0)
+        base_start = max(offset - self.left_padding, 0)
+        extended_start = base_start - self.extra_left_context
+        window_start = max(extended_start, 0)
         window_end = offset + self.window_length + self.right_padding
         window = self.session[window_start:window_end]
 
-        # Extract EMG tensor corresponding to the window.
-        emg = self.transform(window)
-        assert torch.is_tensor(emg)
-
-        # Extract labels corresponding to the original (un-padded) window.
+        # Extract labels using only real timestamps from the original target window.
         timestamps = window[EMGSessionData.TIMESTAMPS]
         start_t = timestamps[offset - window_start]
         end_t = timestamps[(offset + self.window_length - 1) - window_start]
         label_data = self.session.ground_truth(start_t, end_t)
         labels = torch.as_tensor(label_data.labels)
 
+        if extended_start < 0:
+            prefix = np.zeros(-extended_start, dtype=window.dtype)
+            window = np.concatenate((prefix, window))
+        emg = self.transform(window)
+        assert torch.is_tensor(emg)
         return emg, labels
 
     @staticmethod

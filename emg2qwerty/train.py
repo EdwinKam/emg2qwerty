@@ -4,15 +4,20 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import logging
 import os
 import pprint
 from collections.abc import Sequence
 from pathlib import Path
+from statistics import median
+from time import perf_counter
 from typing import Any
 
 import hydra
 import pytorch_lightning as pl
+import torch
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import get_original_cwd, instantiate
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -21,6 +26,43 @@ from emg2qwerty.transforms import Transform
 
 
 log = logging.getLogger(__name__)
+
+
+def _benchmark_inference(module, config: DictConfig, device: torch.device) -> dict:
+    """Time batch-one forward passes on an already prepared spectrogram."""
+    fft_size = config.logspec.n_fft
+    frame_count = 1 + (config.datamodule.window_length - fft_size) // config.logspec.hop_length
+    inputs = torch.zeros(
+        frame_count,
+        1,
+        module.NUM_BANDS,
+        module.ELECTRODE_CHANNELS,
+        fft_size // 2 + 1,
+        device=device,
+    )
+    input_lengths = torch.tensor([frame_count], dtype=torch.int32)
+    module.to(device).eval()
+    timings = []
+    with torch.inference_mode():
+        for _ in range(10):
+            module(inputs, input_lengths=input_lengths)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        for _ in range(30):
+            started = perf_counter()
+            module(inputs, input_lengths=input_lengths)
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            timings.append((perf_counter() - started) * 1_000)
+    return {
+        "frames": frame_count,
+        "batch_size": 1,
+        "median_ms": median(timings),
+        "samples_ms": timings,
+        "device": torch.cuda.get_device_name(device) if device.type == "cuda" else str(device),
+        "torch_version": str(torch.__version__),
+        "cuda_version": torch.version.cuda,
+    }
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="base")
@@ -114,13 +156,25 @@ def main(config: DictConfig):
     # Validate and test on the best checkpoint (if training), or on the
     # loaded `config.checkpoint` (otherwise)
     val_metrics = trainer.validate(module, datamodule)
-    test_metrics = trainer.test(module, datamodule)
+    test_metrics = trainer.test(module, datamodule) if config.evaluate_test else []
 
     results = {
         "val_metrics": val_metrics,
         "test_metrics": test_metrics,
-        "best_checkpoint": trainer.checkpoint_callback.best_model_path,
+        "best_checkpoint": (
+            trainer.checkpoint_callback.best_model_path if config.train else config.checkpoint
+        ),
     }
+    if config.benchmark_inference:
+        results["forward_pass"] = _benchmark_inference(module, config, trainer.strategy.root_device)
+    if config.write_results:
+        results["trainable_parameters"] = sum(
+            parameter.numel() for parameter in module.parameters() if parameter.requires_grad
+        )
+        output = Path(HydraConfig.get().runtime.output_dir) / "results.json"
+        temporary = output.with_suffix(".tmp")
+        temporary.write_text(json.dumps(results, indent=2) + "\n")
+        temporary.replace(output)
     pprint.pprint(results, sort_dicts=False)
 
 

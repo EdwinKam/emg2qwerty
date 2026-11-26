@@ -3,6 +3,102 @@
 
 This course project is built upon the emg2qwerty work from Meta. The first section of this README provides some guidance for working with the repo and contains a running list of FAQs. **Note that the rest of the README is from the original repo and we encourage you to take a look at their work.**
 
+## Course project experiments
+
+### What to run first
+
+| If you want to… | Start with | Recorded result |
+|---|---|---|
+| Verify the setup or reproduce the reference | [TDS baseline](benchmarks/tds_baseline/) | **25.07% test CER** in the sweep rerun. This is the Colab default. |
+| Try our best measured offline model | [TDS + BiGRU](benchmarks/tds_bigru_offline/) | **22.50% test CER** on the same held-out session. The backward GRU uses future frames. |
+| Test whether more context helps | [Width-48 TDS](experiments/tds_longer_context/) | Tests **1.536 s** of context. A result has yet to be recorded in this repository. |
+| Reproduce the completed comparison | [Context and depth sweep](experiments/tds_context_depth/) | Four cases. The width-32 baseline won on validation. |
+
+These CERs are from one subject. Start with the baseline in smoke mode to
+check the setup. Choose BiGRU when offline accuracy is the goal.
+
+`benchmarks/` contains runnable reference configurations with recorded results.
+`experiments/` contains research comparisons and follow-ups. Each folder has
+an `experiment.yaml` that uses the same launcher and an explanation of what the
+run is for. See the [experiment record](docs/tds-context-sweep.md) for training
+commits, measured results, and artifact paths.
+
+### Data split and default protocol
+
+The course experiments use **subject 89335547** from the released emg2qwerty
+dataset. There are **16 training sessions, one validation session, and one
+held-out test session**. [`config/user/single_user.yaml`](config/user/single_user.yaml)
+contains the exact IDs. Use the extracted directory containing the 18
+`.hdf5` files as `--data`. On Colab the default input is
+`My Drive/ECE247A_final_project/89335547.zip`. The session list and file
+checksums are saved with each run. The data source is linked below under
+[Setup](#setup).
+
+The manifests use seed **1501**, **40 epochs**, batch size **32**, one GPU,
+Adam with a 10-epoch warm-up followed by cosine decay, log spectrograms, and
+greedy CTC decoding. Train and validation targets come from 4-second windows.
+The width-48 case explicitly extends the input on the past side while
+preserving the target interval. Select checkpoints and compare variants using
+validation character error rate (CER). After all declared cases finish,
+the runner evaluates the validation winner on the held-out full session.
+
+### Run an experiment
+
+Use the environment described under [Setup](#setup) or the pinned packages
+in `requirements.txt` with Python 3.10 for the Colab workflow. From the repo
+root on a clean checkout, run:
+
+```sh
+python scripts/run_experiment.py \
+  --experiment benchmarks/tds_baseline/experiment.yaml \
+  --data /path/to/hdf5-sessions \
+  --output-root /path/to/experiment-results
+```
+
+Add `--plan` to print the exact commands without using a GPU or reading
+recordings. Add `--check-data` in a separate invocation to verify the split
+files. Use `--smoke` for two training batches and one validation batch per
+case. It skips full-session testing and writes to a `-smoke` directory when
+using `--output-root`. The regular run stores a `summary.md`, checkpoints,
+resolved Hydra configurations, per-case logs, the source commit, file
+checksums and package versions. Resume using the same commit, manifest,
+environment, and output directory. For a new run with changed settings,
+choose a new output root or exact `--output` path.
+
+**Browser Colab.** Import [`Colab_setup.ipynb`](Colab_setup.ipynb), select a
+hosted GPU, and set `EXPERIMENT` to the desired YAML path. It defaults to
+`benchmarks/tds_baseline/experiment.yaml`. For published code, set `PROJECT_BUNDLE = None` and set
+`PROJECT_REF` to the full Git commit SHA. To use a local commit, create
+a Git bundle with `git bundle create emg2qwerty-experiments.bundle HEAD`
+and put it next to `89335547.zip` in Drive. Run the settings and launch
+cells. Reports are saved under `ECE247A_final_project/experiments/manifest-runs`
+and a successful full run releases the GPU. Release any idle runtime after
+a stopped or failed job.
+
+### Add and merge experiments
+
+1. Branch from the agreed integration commit. Add a unique folder under
+   `experiments/` and copy a nearby manifest. Give it a unique `id`. Put
+   common Hydra overrides in `overrides`, case-specific overrides in
+   `cases`, and optional validation comparisons in `comparisons`.
+2. Put experiment-specific model code in that folder if you need it. Use a
+   Python-friendly folder name, for example `my_encoder`. A case can select
+   its class through a Hydra override such as
+   `module._target_=experiments.my_encoder.model.MyEncoder`. Use a unique
+   local Hydra config group entry if extra configuration is needed. A new
+   manifest needs no launcher registry change.
+3. Keep model-specific options in the manifest or its directory. For
+   shared changes, preserve the existing defaults and run the neighboring
+   baseline and BiGRU checks. The harness expects a Lightning model with
+   `forward(inputs, input_lengths=...)`, validation metric `val/CER`,
+   test metric `test/CER`, and an output checkpoint selected by validation.
+4. Commit the manifest, model code and results README. Store recordings, logs,
+   and checkpoints outside Git. A results README should say which commit,
+   split, seed, and hardware produced it and link to the artifacts.
+5. When integrating, preserve separate experiment folders and their provenance.
+   Resolve overlap in shared code explicitly and verify both manifests before
+   merging. See [AGENTS.md](AGENTS.md) for agent-specific guidance.
+
 ## Guiding Tips + FAQs
 _Last updated 2/13/2025_
 - Read through the Project Guidelines to ensure that you have a clear understanding of what we expect
@@ -144,3 +240,39 @@ emg2qwerty is CC-BY-NC-4.0 licensed, as found in the LICENSE file.
       url={https://arxiv.org/abs/2410.20081},
 }
 ```
+
+## Single-user TDS context and depth experiment
+
+The [experiment write-up](docs/tds-context-sweep.md) records the four-way
+context and depth comparison, earlier CNN and BiGRU results, and instructions
+to reproduce the sweep and recover its artifacts.
+
+## CNN-BiGRU experiment
+
+The optional `cnn_bigru_ctc` model keeps the single-user splits, spectrogram
+preprocessing, CTC loss, greedy decoding, and metrics used by the TDS baseline.
+It applies a small temporal convolution and a two-layer bidirectional GRU. The
+baseline remains the default. Select the new architecture with the Hydra
+argument `model=cnn_bigru_ctc`; see `config/model/cnn_bigru_ctc.yaml` for its
+size settings. Use a published branch or commit containing this file when
+running on Colab; local source files are not automatically synchronized.
+
+Start with a short run before committing GPU credits, then compare validation
+CER and runtime under the same data splits and decoding settings. The model
+uses future context and is therefore intended for offline evaluation. The
+existing test loader evaluates an entire session at once: memory and runtime
+on a T4 have not yet been measured, so test that path before a long run. Do not
+compare truncated test sessions as if they were the full baseline test.
+
+## TDS-BiGRU experiment
+
+Select `model=tds_bigru_ctc` to compare the baseline TDS front end (including
+four TDS blocks) with an added two-layer bidirectional GRU. The defaults retain
+the baseline's wrist feature size, preprocessing, data splits, CTC loss, and
+greedy decoder. The GRU has 128 hidden units per direction, matching the
+smaller CNN-BiGRU model. The TDS layers shorten each spectrogram by 124 frames;
+sequence lengths are adjusted before packing and computing CTC loss.
+
+This is an offline model because the backward GRU uses future context. The
+[benchmark folder](benchmarks/tds_bigru_offline/) records the completed run and a
+manifest for repeating it.

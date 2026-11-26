@@ -1,0 +1,24 @@
+id: tds-longer-context
+title: TDS longer-context experiment
+split: single_user
+seed: 1501
+epochs: 40
+overrides:
+  - transforms=log_spectrogram
+  - optimizer=adam
+  - lr_scheduler=linear_warmup_cosine_annealing
+  - decoder=ctc_greedy
+  - batch_size=32
+  - num_workers=2
+cases:
+  tds-4x48:
+    frontend_context_ms: 1536
+    overrides:
+      - model=tds_conv_ctc
+      - module.in_features=528
+      - module.mlp_features=[384]
+      - datamodule.window_length=8000
+      - datamodule.padding=[1800,200]
+      - module.block_channels=[24,24,24,24]
+      - module.kernel_width=48
+      - +datamodule.extra_left_context=1024
