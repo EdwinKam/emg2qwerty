@@ -145,6 +145,12 @@ emg2qwerty is CC-BY-NC-4.0 licensed, as found in the LICENSE file.
 }
 ```
 
+## Single-user TDS context and depth experiment
+
+The [experiment write-up](docs/tds-context-sweep.md) records the four-way
+context and depth comparison, earlier CNN and BiGRU results, and instructions
+to reproduce the sweep and recover its artifacts.
+
 ## CNN-BiGRU experiment
 
 The optional `cnn_bigru_ctc` model keeps the single-user splits, spectrogram

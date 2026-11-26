@@ -13,6 +13,46 @@ The raw span is the 32 ms FFT window plus 8 ms for each additional frame. The co
 
 The runner selects each case's best checkpoint by validation CER and runs the held-out test only on the global validation winner. The test session was used in earlier project runs. Report it as a held-out session result and use a fresh session for an independent final estimate if available. Saving the seed and package versions helps repeat the run, but the same GPU setup is needed for a close timing comparison.
 
+## Results from November 25–26, 2026
+
+All four cases completed on a single Tesla T4 using seed 1501 and training commit
+`d4e5e0ce922476d248580c33954cb8db02e18a84`. CER is character error rate, with
+lower values indicating fewer edits per reference character.
+
+| Configuration | Raw signal span | Validation CER | Test CER | Trainable parameters | Median forward time |
+|---|---:|---:|---:|---:|---:|
+| Four blocks, width 32 | 1,024 ms | **23.75%** | **25.07%** | 5,293,315 | 3.61 ms |
+| Four blocks, width 16 | 512 ms | 43.27% | — | 5,256,451 | 3.34 ms |
+| Two blocks, width 63 | 1,024 ms | 32.61% | — | 2,923,603 | 2.38 ms |
+| Two blocks, width 31 | 512 ms | 51.13% | — | 2,886,739 | 2.15 ms |
+
+Only the validation winner was evaluated on the held-out test session. The
+forward-pass timings use batch size one and one 497-frame spectrogram per pass.
+
+- **Context had the larger effect.** Increasing the raw span from 512 to
+  1,024 ms reduced validation CER by **19.52 percentage points** at four
+  blocks and **18.52 points** at two blocks. Median forward time increased
+  by 0.27 ms and 0.23 ms, respectively.
+- **Depth also mattered.** Four blocks reduced validation CER by **7.86 points**
+  at 512 ms and **8.86 points** at 1,024 ms. The deeper model also has more
+  parameters and does more work per frame. At 1,024 ms it took an additional
+  1.22 ms of median forward time.
+- **Prioritize keeping about one second of context if reducing compute.** The
+  long-context two-block model had 32.61% validation CER and a 2.38 ms
+  forward pass. The short-context four-block model had 43.27% validation
+  CER and a 3.34 ms forward pass.
+
+The comparison used one seed and one subject, with one validation and one test
+session. The measured gains establish what happened on this split. Their
+magnitude may change on other sessions or users. There was no recurrent layer in
+the sweep. Neither GRU hidden-state width nor the available context for a GRU
+was varied. The benchmark measures computation over prepared features. Measure
+end-to-end key emission delay separately for a streaming design.
+
+The run manifest, logs, checkpoints, and machine-generated summary are in the
+[Drive sweep folder](https://drive.google.com/drive/u/0/folders/18kfsMIYYFjkAOsMmGLukP8v64Mp3m4yH)
+for collaborators who already have access.
+
 ## Run on Colab
 
 1. Use the included `Colab_setup.ipynb` and a dedicated hosted GPU runtime. Put `tds-context-sweep.bundle` in your Drive project directory alongside the existing `89335547.zip`. The bundle contains Git history and source. The subject ZIP supplies the recordings.
@@ -68,7 +108,7 @@ See `historical-run-archives.sha256` for archive checksums. Keep these archives 
 
 ## Follow-up experiments
 
-1. **Reliability first.** Repeat the most informative comparison with another seed if the first is close. Use a new output directory and the runner's `--seed` option for a second full matrix, or reuse the relevant case commands with only the seed and output path changed. More sessions or users tell you whether the result holds outside this subject.
+1. **Confirm the context effect.** For the next sweep, test an intermediate span around 0.75 s at four blocks and repeat the 1.0 s baseline with another seed. To confirm the original comparison across seeds, repeat both endpoint configurations at the new seed. Reuse the matching case commands with only the intended settings and output paths changed. Repeat on another session or user to test whether the result generalizes.
 2. **Decoder headroom.** Evaluate greedy versus CTC beam decoding on a fixed saved checkpoint. Choose beam settings using validation and report the added inference cost along with any change in CER. This needs evaluation rather than model retraining.
 3. **Better temporal modeling.** With a frontend selected, compare it against the same frontend followed by a recurrent or attention encoder. For live typing, compare a forward GRU with a causal local-attention Conformer at a similar parameter budget and the same allowed lookahead. Measure time from key-down to emission in addition to CER.
 4. **Use key timestamps to test the curriculum idea.** Compare conventional CTC training with the same model and training budget starting on well-spaced key windows before switching to the usual mix. Evaluate both on natural held-out typing. Group errors by inter-key gap to see whether short context mainly hurts fast or overlapping presses.
